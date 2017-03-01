@@ -15,6 +15,12 @@
 #include <utility>
 #include <type_traits>
 
+#ifdef _MSC_VER
+#define SKA_NOINLINE(...) __declspec(noinline) __VA_ARGS__
+#else
+#define SKA_NOINLINE(...) __VA_ARGS__ __attribute__((noinline))
+#endif
+
 namespace ska
 {
 struct prime_number_hash_policy;
@@ -365,7 +371,7 @@ public:
         catch(...)
         {
             clear();
-            deallocate_data(entries, entries_end, max_lookups);
+            deallocate_data(entries, num_slots_minus_one, max_lookups);
             throw;
         }
     }
@@ -431,7 +437,7 @@ public:
     ~sherwood_v3_table()
     {
         clear();
-        deallocate_data(entries, entries_end, max_lookups);
+        deallocate_data(entries, num_slots_minus_one, max_lookups);
     }
 
     const allocator_type & get_allocator() const
@@ -522,11 +528,11 @@ public:
     }
     iterator end()
     {
-        return { entries_end + static_cast<ptrdiff_t>(max_lookups - 1) };
+        return { entries + static_cast<ptrdiff_t>(num_slots_minus_one + max_lookups) };
     }
     const_iterator end() const
     {
-        return { entries_end + static_cast<ptrdiff_t>(max_lookups - 1) };
+        return { entries + static_cast<ptrdiff_t>(num_slots_minus_one + max_lookups) };
     }
     const_iterator cend() const
     {
@@ -535,7 +541,7 @@ public:
 
     iterator find(const FindKey & key)
     {
-        size_t index = hash_policy.index_for_hash(hash_object(key));
+        size_t index = hash_policy.index_for_hash(hash_object(key), num_slots_minus_one);
         EntryPointer it = entries + ptrdiff_t(index);
         for (int8_t distance = 0;; ++it, ++distance)
         {
@@ -573,9 +579,7 @@ public:
     template<typename Key, typename... Args>
     std::pair<iterator, bool> emplace(Key && key, Args &&... args)
     {
-        using std::swap;
-
-        size_t index = hash_policy.index_for_hash(hash_object(key));
+        size_t index = hash_policy.index_for_hash(hash_object(key), num_slots_minus_one);
         EntryPointer current_entry = entries + ptrdiff_t(index);
         int8_t distance_from_desired = 0;
         for (;; ++distance_from_desired, ++current_entry)
@@ -585,46 +589,7 @@ public:
             else if (compares_equal(key, current_entry->value()))
                 return { { current_entry }, false };
         }
-        if (distance_from_desired == max_lookups || static_cast<double>(num_elements + 1) / static_cast<double>(bucket_count()) > _max_load_factor)
-        {
-            grow();
-            return emplace(std::forward<Key>(key), std::forward<Args>(args)...);
-        }
-        else if (current_entry->is_empty())
-        {
-            current_entry->emplace(distance_from_desired, std::forward<Key>(key), std::forward<Args>(args)...);
-            ++num_elements;
-            return { { current_entry }, true };
-        }
-        value_type to_insert(std::forward<Key>(key), std::forward<Args>(args)...);
-        swap(distance_from_desired, current_entry->distance_from_desired);
-        swap(to_insert, current_entry->value());
-        iterator result = { current_entry };
-        for (++distance_from_desired, ++current_entry;; ++current_entry)
-        {
-            if (current_entry->is_empty())
-            {
-                current_entry->emplace(distance_from_desired, std::move(to_insert));
-                ++num_elements;
-                return { result, true };
-            }
-            else if (current_entry->distance_from_desired < distance_from_desired)
-            {
-                swap(distance_from_desired, current_entry->distance_from_desired);
-                swap(to_insert, current_entry->value());
-                ++distance_from_desired;
-            }
-            else
-            {
-                ++distance_from_desired;
-                if (distance_from_desired == max_lookups)
-                {
-                    swap(to_insert, result.current->value());
-                    grow();
-                    return emplace(std::move(to_insert));
-                }
-            }
-        }
+        return emplace_new_key(distance_from_desired, current_entry, std::forward<Key>(key), std::forward<Args>(args)...);
     }
 
     std::pair<iterator, bool> insert(const value_type & value)
@@ -675,19 +640,19 @@ public:
             return;
         int8_t new_max_lookups = compute_max_lookups(num_buckets);
         EntryPointer new_buckets(AllocatorTraits::allocate(*this, num_buckets + new_max_lookups));
-        EntryPointer new_buckets_end = new_buckets + ptrdiff_t(num_buckets);
-        for (EntryPointer it = new_buckets, real_end = new_buckets_end + static_cast<ptrdiff_t>(new_max_lookups - 1); it != real_end; ++it)
+        for (EntryPointer it = new_buckets, real_end = it + static_cast<ptrdiff_t>(num_buckets + new_max_lookups - 1); it != real_end; ++it)
         {
             it->distance_from_desired = -1;
         }
-        new_buckets_end[new_max_lookups - 1].distance_from_desired = Entry::special_end_value;
+        new_buckets[num_buckets + new_max_lookups - 1].distance_from_desired = Entry::special_end_value;
         std::swap(entries, new_buckets);
-        std::swap(entries_end, new_buckets_end);
+        std::swap(num_slots_minus_one, num_buckets);
+        --num_slots_minus_one;
         hash_policy.commit(new_prime_index);
         int8_t old_max_lookups = max_lookups;
         max_lookups = new_max_lookups;
         num_elements = 0;
-        for (EntryPointer it = new_buckets, end = new_buckets_end + static_cast<ptrdiff_t>(old_max_lookups - 1); it != end; ++it)
+        for (EntryPointer it = new_buckets, end = it + static_cast<ptrdiff_t>(num_buckets + old_max_lookups); it != end; ++it)
         {
             if (it->has_value())
             {
@@ -695,7 +660,7 @@ public:
                 it->destroy_value();
             }
         }
-        deallocate_data(new_buckets, new_buckets_end, old_max_lookups);
+        deallocate_data(new_buckets, num_buckets, old_max_lookups);
     }
 
     void reserve(size_t num_elements)
@@ -761,7 +726,7 @@ public:
 
     void clear()
     {
-        for (EntryPointer it = entries, end = entries_end + static_cast<ptrdiff_t>(max_lookups - 1); it != end; ++it)
+        for (EntryPointer it = entries, end = it + static_cast<ptrdiff_t>(num_slots_minus_one + max_lookups); it != end; ++it)
         {
             if (it->has_value())
                 it->destroy_value();
@@ -794,7 +759,7 @@ public:
     }
     size_t bucket_count() const
     {
-        return entries_end - entries;
+        return num_slots_minus_one + 1;
     }
     size_type max_bucket_count() const
     {
@@ -802,7 +767,7 @@ public:
     }
     size_t bucket(const FindKey & key) const
     {
-        return hash_policy.index_for_hash(hash_object(key));
+        return hash_policy.index_for_hash(hash_object(key), num_slots_minus_one);
     }
     float load_factor() const
     {
@@ -828,11 +793,11 @@ public:
 
 private:
     typename HashPolicySelector<ArgumentHash>::type hash_policy;
-    int8_t max_lookups = detailv3::min_lookups;
+    int8_t max_lookups = detailv3::min_lookups - 1;
     float _max_load_factor = 0.5f;
     using DefaultTable = detailv3::EntryDefaultTable<T>;
     EntryPointer entries = const_cast<Entry *>(DefaultTable::table);
-    EntryPointer entries_end = const_cast<Entry *>(DefaultTable::table);
+    size_t num_slots_minus_one = 0;
     size_t num_elements = 0;
 
     static int8_t compute_max_lookups(size_t num_buckets)
@@ -855,10 +820,56 @@ private:
         using std::swap;
         swap(hash_policy, other.hash_policy);
         swap(entries, other.entries);
-        swap(entries_end, other.entries_end);
+        swap(num_slots_minus_one, other.num_slots_minus_one);
         swap(num_elements, other.num_elements);
         swap(max_lookups, other.max_lookups);
         swap(_max_load_factor, other._max_load_factor);
+    }
+
+    template<typename Key, typename... Args>
+    SKA_NOINLINE(std::pair<iterator, bool>) emplace_new_key(int8_t distance_from_desired, EntryPointer current_entry, Key && key, Args &&... args)
+    {
+        using std::swap;
+        if (num_slots_minus_one == 0 || distance_from_desired == max_lookups || static_cast<double>(num_elements + 1) / static_cast<double>(bucket_count()) > _max_load_factor)
+        {
+            grow();
+            return emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+        }
+        else if (current_entry->is_empty())
+        {
+            current_entry->emplace(distance_from_desired, std::forward<Key>(key), std::forward<Args>(args)...);
+            ++num_elements;
+            return { { current_entry }, true };
+        }
+        value_type to_insert(std::forward<Key>(key), std::forward<Args>(args)...);
+        swap(distance_from_desired, current_entry->distance_from_desired);
+        swap(to_insert, current_entry->value());
+        iterator result = { current_entry };
+        for (++distance_from_desired, ++current_entry;; ++current_entry)
+        {
+            if (current_entry->is_empty())
+            {
+                current_entry->emplace(distance_from_desired, std::move(to_insert));
+                ++num_elements;
+                return { result, true };
+            }
+            else if (current_entry->distance_from_desired < distance_from_desired)
+            {
+                swap(distance_from_desired, current_entry->distance_from_desired);
+                swap(to_insert, current_entry->value());
+                ++distance_from_desired;
+            }
+            else
+            {
+                ++distance_from_desired;
+                if (distance_from_desired == max_lookups)
+                {
+                    swap(to_insert, result.current->value());
+                    grow();
+                    return emplace(std::move(to_insert));
+                }
+            }
+        }
     }
 
     void grow()
@@ -866,20 +877,21 @@ private:
         rehash(std::max(size_t(4), 2 * bucket_count()));
     }
 
-    void deallocate_data(EntryPointer begin, EntryPointer end, int8_t max_lookups)
+    void deallocate_data(EntryPointer begin, size_t num_slots_minus_one, int8_t max_lookups)
     {
         if (begin != const_cast<Entry *>(DefaultTable::table))
         {
-            AllocatorTraits::deallocate(*this, begin, (end - begin) + max_lookups);
+            AllocatorTraits::deallocate(*this, begin, num_slots_minus_one + max_lookups + 1);
         }
     }
 
     void reset_to_empty_state()
     {
-        deallocate_data(entries, entries_end, max_lookups);
-        entries = entries_end = const_cast<Entry *>(DefaultTable::table);
+        deallocate_data(entries, num_slots_minus_one, max_lookups);
+        entries = const_cast<Entry *>(DefaultTable::table);
+        num_slots_minus_one = 0;
         hash_policy.reset();
-        max_lookups = detailv3::min_lookups;
+        max_lookups = detailv3::min_lookups - 1;
     }
 
     template<typename U>
@@ -923,7 +935,7 @@ private:
 
 struct prime_number_hash_policy
 {
-    size_t index_for_hash(size_t hash) const
+    size_t index_for_hash(size_t hash, size_t /*num_slots_minus_one*/) const
     {
         switch(prime_index)
         {
@@ -1378,26 +1390,22 @@ private:
 
 struct power_of_two_hash_policy
 {
-    size_t index_for_hash(size_t hash) const
+    size_t index_for_hash(size_t hash, size_t num_slots_minus_one) const
     {
-        return hash & ((size_t(1) << current_power_of_two) - size_t(1));
+        return hash & num_slots_minus_one;
     }
     int8_t next_size_over(size_t & size) const
     {
         size = detailv3::next_power_of_two(size);
-        return detailv3::log2(size);
+        return 0;
     }
-    void commit(int8_t value)
+    void commit(int8_t)
     {
-        current_power_of_two = value;
     }
     void reset()
     {
-        current_power_of_two = 0;
     }
 
-private:
-    int8_t current_power_of_two = 0;
 };
 
 template<typename K, typename V, typename H = std::hash<K>, typename E = std::equal_to<K>, typename A = std::allocator<std::pair<K, V> > >
