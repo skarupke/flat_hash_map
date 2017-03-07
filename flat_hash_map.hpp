@@ -181,36 +181,44 @@ struct sherwood_v3_entry
     template<typename... Args>
     void emplace(int8_t distance, Args &&... args)
     {
-        new (&bytes) T(std::forward<Args>(args)...);
+        new (std::addressof(value)) T(std::forward<Args>(args)...);
         distance_from_desired = distance;
     }
 
     void destroy_value()
     {
-        value().~T();
+        value.~T();
         distance_from_desired = -1;
-    }
-
-    inline T & value()
-    {
-        return reinterpret_cast<T &>(bytes);
     }
 
     int8_t distance_from_desired = -1;
     static constexpr int8_t special_end_value = 0;
+    union { T value; };
+};
+template<typename T>
+struct sherwood_v3_entry_constexpr
+{
+    static constexpr sherwood_v3_entry_constexpr special_end_entry()
+    {
+        sherwood_v3_entry_constexpr end;
+        end.distance_from_desired = sherwood_v3_entry<T>::special_end_value;
+        return end;
+    }
+
+    int8_t distance_from_desired = -1;
     typename std::aligned_storage<sizeof(T), alignof(T)>::type bytes = {};
 };
 static constexpr int8_t min_lookups = 4;
 template<typename T>
 struct EntryDefaultTable
 {
-    static constexpr const sherwood_v3_entry<T> table[min_lookups] =
+    static constexpr const sherwood_v3_entry_constexpr<T> table[min_lookups] =
     {
-        {}, {}, {}, sherwood_v3_entry<T>::special_end_entry()
+        {}, {}, {}, sherwood_v3_entry_constexpr<T>::special_end_entry()
     };
 };
 template<typename T>
-constexpr const sherwood_v3_entry<T> EntryDefaultTable<T>::table[min_lookups];
+constexpr const sherwood_v3_entry_constexpr<T> EntryDefaultTable<T>::table[min_lookups];
 
 inline int8_t log2(size_t value)
 {
@@ -491,11 +499,11 @@ public:
 
         ValueType & operator*() const
         {
-            return current->value();
+            return current->value;
         }
         ValueType * operator->() const
         {
-            return std::addressof(current->value());
+            return std::addressof(current->value);
         }
 
         operator templated_iterator<const value_type>() const
@@ -543,13 +551,12 @@ public:
     {
         size_t index = hash_policy.index_for_hash(hash_object(key), num_slots_minus_one);
         EntryPointer it = entries + ptrdiff_t(index);
-        for (int8_t distance = 0;; ++it, ++distance)
+        for (int8_t distance = 0; it->distance_from_desired >= distance; ++distance, ++it)
         {
-            if (it->distance_from_desired < distance)
-                return end();
-            else if (compares_equal(key, it->value()))
+            if (compares_equal(key, it->value))
                 return { it };
         }
+        return end();
     }
     const_iterator find(const FindKey & key) const
     {
@@ -582,11 +589,9 @@ public:
         size_t index = hash_policy.index_for_hash(hash_object(key), num_slots_minus_one);
         EntryPointer current_entry = entries + ptrdiff_t(index);
         int8_t distance_from_desired = 0;
-        for (;; ++distance_from_desired, ++current_entry)
+        for (; current_entry->distance_from_desired >= distance_from_desired; ++current_entry, ++distance_from_desired)
         {
-            if (current_entry->distance_from_desired < distance_from_desired)
-                break;
-            else if (compares_equal(key, current_entry->value()))
+            if (compares_equal(key, current_entry->value))
                 return { { current_entry }, false };
         }
         return emplace_new_key(distance_from_desired, current_entry, std::forward<Key>(key), std::forward<Args>(args)...);
@@ -656,7 +661,7 @@ public:
         {
             if (it->has_value())
             {
-                emplace(std::move(it->value()));
+                emplace(std::move(it->value));
                 it->destroy_value();
             }
         }
@@ -681,7 +686,7 @@ public:
         --num_elements;
         for (EntryPointer next = current + ptrdiff_t(1); !next->is_at_desired_position(); ++current, ++next)
         {
-            current->emplace(next->distance_from_desired - 1, std::move(next->value()));
+            current->emplace(next->distance_from_desired - 1, std::move(next->value));
             next->destroy_value();
         }
         return { to_erase.current };
@@ -704,7 +709,7 @@ public:
         for (EntryPointer it = end_it.current; !it->is_at_desired_position();)
         {
             EntryPointer target = it - num_to_move;
-            target->emplace(it->distance_from_desired - num_to_move, std::move(it->value()));
+            target->emplace(it->distance_from_desired - num_to_move, std::move(it->value));
             it->destroy_value();
             ++it;
             num_to_move = std::min(static_cast<ptrdiff_t>(it->distance_from_desired), num_to_move);
@@ -792,12 +797,12 @@ public:
     }
 
 private:
+    using DefaultTable = detailv3::EntryDefaultTable<T>;
+    EntryPointer entries = const_cast<Entry *>(reinterpret_cast<const Entry *>(DefaultTable::table));
+    size_t num_slots_minus_one = 0;
     typename HashPolicySelector<ArgumentHash>::type hash_policy;
     int8_t max_lookups = detailv3::min_lookups - 1;
     float _max_load_factor = 0.5f;
-    using DefaultTable = detailv3::EntryDefaultTable<T>;
-    EntryPointer entries = const_cast<Entry *>(DefaultTable::table);
-    size_t num_slots_minus_one = 0;
     size_t num_elements = 0;
 
     static int8_t compute_max_lookups(size_t num_buckets)
@@ -843,7 +848,7 @@ private:
         }
         value_type to_insert(std::forward<Key>(key), std::forward<Args>(args)...);
         swap(distance_from_desired, current_entry->distance_from_desired);
-        swap(to_insert, current_entry->value());
+        swap(to_insert, current_entry->value);
         iterator result = { current_entry };
         for (++distance_from_desired, ++current_entry;; ++current_entry)
         {
@@ -856,7 +861,7 @@ private:
             else if (current_entry->distance_from_desired < distance_from_desired)
             {
                 swap(distance_from_desired, current_entry->distance_from_desired);
-                swap(to_insert, current_entry->value());
+                swap(to_insert, current_entry->value);
                 ++distance_from_desired;
             }
             else
@@ -864,7 +869,7 @@ private:
                 ++distance_from_desired;
                 if (distance_from_desired == max_lookups)
                 {
-                    swap(to_insert, result.current->value());
+                    swap(to_insert, result.current->value);
                     grow();
                     return emplace(std::move(to_insert));
                 }
@@ -879,7 +884,7 @@ private:
 
     void deallocate_data(EntryPointer begin, size_t num_slots_minus_one, int8_t max_lookups)
     {
-        if (begin != const_cast<Entry *>(DefaultTable::table))
+        if (begin != const_cast<Entry *>(reinterpret_cast<const Entry *>(DefaultTable::table)))
         {
             AllocatorTraits::deallocate(*this, begin, num_slots_minus_one + max_lookups + 1);
         }
@@ -888,7 +893,7 @@ private:
     void reset_to_empty_state()
     {
         deallocate_data(entries, num_slots_minus_one, max_lookups);
-        entries = const_cast<Entry *>(DefaultTable::table);
+        entries = const_cast<Entry *>(reinterpret_cast<const Entry *>(DefaultTable::table));
         num_slots_minus_one = 0;
         hash_policy.reset();
         max_lookups = detailv3::min_lookups - 1;
