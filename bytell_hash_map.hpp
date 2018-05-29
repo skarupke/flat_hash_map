@@ -35,13 +35,13 @@ using ska::detailv3::HashPolicySelector;
 template<typename = void>
 struct sherwood_v8_constants
 {
-    static constexpr int8_t magic_for_empty             = 0b11111111;
-    static constexpr int8_t magic_for_reserved          = 0b11111110;
-    static constexpr int8_t bits_for_direct_hit         = 0b10000000;
-    static constexpr int8_t magic_for_direct_hit        = 0b00000000;
-    static constexpr int8_t magic_for_list_entry        = 0b10000000;
+    static constexpr int8_t magic_for_empty = int8_t(0b11111111);
+    static constexpr int8_t magic_for_reserved = int8_t(0b11111110);
+    static constexpr int8_t bits_for_direct_hit = int8_t(0b10000000);
+    static constexpr int8_t magic_for_direct_hit = int8_t(0b00000000);
+    static constexpr int8_t magic_for_list_entry = int8_t(0b10000000);
 
-    static constexpr int8_t bits_for_distance           = 0b01111111;
+    static constexpr int8_t bits_for_distance = int8_t(0b01111111);
     inline static int distance_from_metadata(int8_t metadata)
     {
         return metadata & bits_for_distance;
@@ -99,6 +99,12 @@ constexpr size_t sherwood_v8_constants<T>::jump_distances[num_jump_distances];
 template<typename T, uint8_t BlockSize>
 struct sherwood_v8_block
 {
+    sherwood_v8_block()
+    {
+    }
+    ~sherwood_v8_block()
+    {
+    }
     int8_t control_bytes[BlockSize];
     union
     {

@@ -159,10 +159,10 @@ static constexpr int8_t min_lookups = 4;
 template<typename T>
 struct sherwood_v3_entry
 {
-    constexpr sherwood_v3_entry()
+    sherwood_v3_entry()
     {
     }
-    constexpr sherwood_v3_entry(int8_t distance_from_desired)
+    sherwood_v3_entry(int8_t distance_from_desired)
         : distance_from_desired(distance_from_desired)
     {
     }
@@ -448,6 +448,11 @@ public:
     template<typename ValueType>
     struct templated_iterator
     {
+        templated_iterator() = default;
+        templated_iterator(EntryPointer current)
+            : current(current)
+        {
+        }
         EntryPointer current = EntryPointer();
 
         using iterator_category = std::forward_iterator_tag;
