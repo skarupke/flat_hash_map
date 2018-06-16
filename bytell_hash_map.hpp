@@ -15,12 +15,6 @@
 #include <vector>
 #include <array>
 
-#ifdef _MSC_VER
-#define SKA_NOINLINE(...) __declspec(noinline) __VA_ARGS__
-#else
-#define SKA_NOINLINE(...) __VA_ARGS__ __attribute__((noinline))
-#endif
-
 namespace ska
 {
 
@@ -413,10 +407,10 @@ public:
         size_t index = hash_object(key);
         size_t num_slots_minus_one = this->num_slots_minus_one;
         BlockPointer entries = this->entries;
+        index = hash_policy.index_for_hash(index, num_slots_minus_one);
         bool first = true;
         for (;;)
         {
-            index = hash_policy.index_for_hash(index, num_slots_minus_one);
             size_t block_index = index / BlockSize;
             int index_in_block = index % BlockSize;
             BlockPointer block = entries + block_index;
@@ -433,6 +427,7 @@ public:
             if (to_next_index == 0)
                 return end();
             index += Constants::jump_distances[to_next_index];
+            index = hash_policy.keep_in_range(index, num_slots_minus_one);
         }
     }
     inline const_iterator find(const FindKey & key) const
@@ -467,10 +462,10 @@ public:
         size_t index = hash_object(key);
         size_t num_slots_minus_one = this->num_slots_minus_one;
         BlockPointer entries = this->entries;
+        index = hash_policy.index_for_hash(index, num_slots_minus_one);
         bool first = true;
         for (;;)
         {
-            index = hash_policy.index_for_hash(index, num_slots_minus_one);
             size_t block_index = index / BlockSize;
             int index_in_block = index % BlockSize;
             BlockPointer block = entries + block_index;
@@ -487,6 +482,7 @@ public:
             if (to_next_index == 0)
                 return emplace_new_key({ index, block }, std::forward<Key>(key), std::forward<Args>(args)...);
             index += Constants::jump_distances[to_next_index];
+            index = hash_policy.keep_in_range(index, num_slots_minus_one);
         }
     }
 

@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <cstddef>
 #include <functional>
-#include <vector>
 #include <cmath>
 #include <algorithm>
 #include <iterator>
@@ -24,6 +23,7 @@ namespace ska
 {
 struct prime_number_hash_policy;
 struct power_of_two_hash_policy;
+struct fibonacci_hash_policy;
 
 namespace detailv3
 {
@@ -268,7 +268,7 @@ template<typename...> using void_t = void;
 template<typename T, typename = void>
 struct HashPolicySelector
 {
-    typedef prime_number_hash_policy type;
+    typedef fibonacci_hash_policy type;
 };
 template<typename T>
 struct HashPolicySelector<T, void_t<typename T::hash_policy>>
@@ -634,11 +634,10 @@ public:
             return;
         int8_t new_max_lookups = compute_max_lookups(num_buckets);
         EntryPointer new_buckets(AllocatorTraits::allocate(*this, num_buckets + new_max_lookups));
-        for (EntryPointer it = new_buckets, real_end = it + static_cast<ptrdiff_t>(num_buckets + new_max_lookups - 1); it != real_end; ++it)
-        {
+        EntryPointer special_end_item = new_buckets + static_cast<ptrdiff_t>(num_buckets + new_max_lookups - 1);
+        for (EntryPointer it = new_buckets; it != special_end_item; ++it)
             it->distance_from_desired = -1;
-        }
-        new_buckets[num_buckets + new_max_lookups - 1].distance_from_desired = Entry::special_end_value;
+        special_end_item->distance_from_desired = Entry::special_end_value;
         std::swap(entries, new_buckets);
         std::swap(num_slots_minus_one, num_buckets);
         --num_slots_minus_one;
@@ -683,6 +682,8 @@ public:
 
     iterator erase(const_iterator begin_it, const_iterator end_it)
     {
+        if (begin_it == end_it)
+            return { begin_it.current };
         for (EntryPointer it = begin_it.current, end = end_it.current; it != end; ++it)
         {
             if (it->has_value())
@@ -753,7 +754,7 @@ public:
     }
     size_t bucket_count() const
     {
-        return num_slots_minus_one + 1;
+        return num_slots_minus_one ? num_slots_minus_one + 1 : 0;
     }
     size_type max_bucket_count() const
     {
@@ -823,7 +824,7 @@ private:
     SKA_NOINLINE(std::pair<iterator, bool>) emplace_new_key(int8_t distance_from_desired, EntryPointer current_entry, Key && key, Args &&... args)
     {
         using std::swap;
-        if (num_slots_minus_one == 0 || distance_from_desired == max_lookups || static_cast<double>(num_elements + 1) / static_cast<double>(bucket_count()) > _max_load_factor)
+        if (num_slots_minus_one == 0 || distance_from_desired == max_lookups || num_elements + 1 > (num_slots_minus_one + 1) * static_cast<double>(_max_load_factor))
         {
             grow();
             return emplace(std::forward<Key>(key), std::forward<Args>(args)...);
@@ -1264,6 +1265,35 @@ struct power_of_two_hash_policy
 
 };
 
+struct fibonacci_hash_policy
+{
+    size_t index_for_hash(size_t hash, size_t /*num_slots_minus_one*/) const
+    {
+        return (11400714819323198485ull * hash) >> shift;
+    }
+    size_t keep_in_range(size_t index, size_t num_slots_minus_one) const
+    {
+        return index & num_slots_minus_one;
+    }
+
+    int8_t next_size_over(size_t & size) const
+    {
+        size = detailv3::next_power_of_two(size);
+        return 64 - detailv3::log2(size);
+    }
+    void commit(int8_t shift)
+    {
+        this->shift = shift;
+    }
+    void reset()
+    {
+        shift = 63;
+    }
+
+private:
+    int8_t shift = 63;
+};
+
 template<typename K, typename V, typename H = std::hash<K>, typename E = std::equal_to<K>, typename A = std::allocator<std::pair<K, V> > >
 class flat_hash_map
         : public detailv3::sherwood_v3_table
@@ -1299,11 +1329,11 @@ public:
     {
     }
 
-    V & operator[](const K & key)
+    inline V & operator[](const K & key)
     {
         return emplace(key, convertible_to_value()).first->second;
     }
-    V & operator[](K && key)
+    inline V & operator[](K && key)
     {
         return emplace(std::move(key), convertible_to_value()).first->second;
     }
@@ -1326,6 +1356,32 @@ public:
     std::pair<typename Table::iterator, bool> emplace()
     {
         return emplace(key_type(), convertible_to_value());
+    }
+    template<typename M>
+    std::pair<typename Table::iterator, bool> insert_or_assign(const key_type & key, M && m)
+    {
+        auto emplace_result = emplace(key, std::forward<M>(m));
+        if (!emplace_result.second)
+            emplace_result.first->second = std::forward<M>(m);
+        return emplace_result;
+    }
+    template<typename M>
+    std::pair<typename Table::iterator, bool> insert_or_assign(key_type && key, M && m)
+    {
+        auto emplace_result = emplace(std::move(key), std::forward<M>(m));
+        if (!emplace_result.second)
+            emplace_result.first->second = std::forward<M>(m);
+        return emplace_result;
+    }
+    template<typename M>
+    typename Table::iterator insert_or_assign(typename Table::const_iterator, const key_type & key, M && m)
+    {
+        return insert_or_assign(key, std::forward<M>(m)).first;
+    }
+    template<typename M>
+    typename Table::iterator insert_or_assign(typename Table::const_iterator, key_type && key, M && m)
+    {
+        return insert_or_assign(std::move(key), std::forward<M>(m)).first;
     }
 
     friend bool operator==(const flat_hash_map & lhs, const flat_hash_map & rhs)
