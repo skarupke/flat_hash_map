@@ -1278,7 +1278,7 @@ struct fibonacci_hash_policy
 
     int8_t next_size_over(size_t & size) const
     {
-        size = detailv3::next_power_of_two(size);
+        size = std::max(size_t(2), detailv3::next_power_of_two(size));
         return 64 - detailv3::log2(size);
     }
     void commit(int8_t shift)
