@@ -510,6 +510,7 @@ public:
             if (it->has_value())
                 return { it };
         }
+        return end();
     }
     const_iterator begin() const
     {
@@ -518,6 +519,7 @@ public:
             if (it->has_value())
                 return { it };
         }
+        return cend();
     }
     const_iterator cbegin() const
     {
