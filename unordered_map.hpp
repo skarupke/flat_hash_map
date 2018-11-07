@@ -778,6 +778,29 @@ public:
         return emplace(key_type(), convertible_to_value());
     }
 
+	template<typename... Args>
+	std::pair<typename Table::iterator, bool> try_emplace(const key_type & key, Args&&... args)
+	{
+		return this->try_emplace_impl(key, std::forward<Args>(args)...);
+	}
+
+	template<typename... Args>
+	std::pair<typename Table::iterator, bool> try_emplace(key_type && key, Args&&... args)
+	{
+		return try_emplace_impl(std::forward<key_type>(key), std::forward<Args>(args)...);
+	}
+
+	template<typename... Args >
+	typename Table::iterator try_emplace(typename Table::const_iterator, const key_type & key, Args&&... args)
+	{
+		return try_emplace(key, std::forward<Args>(args)...).first;
+	}
+	template<typename... Args>
+	typename Table::iterator try_emplace(typename Table::const_iterator, key_type && key, Args&&... args)
+	{
+		return try_emplace(std::forward<key_type>(key), std::forward<Args>(args)...).first;
+	}
+
     friend bool operator==(const unordered_map & lhs, const unordered_map & rhs)
     {
         if (lhs.size() != rhs.size())
@@ -805,6 +828,14 @@ private:
             return V();
         }
     };
+
+	template <typename KeyType = key_type, class... Args>
+	std::pair<typename Table::iterator, bool> try_emplace_impl(KeyType&& key, Args&&... args) {
+		auto res = this->find(key);
+		if (res == this->end())
+			return this->emplace(std::forward<KeyType>(key), std::forward<Args>(args)...);
+		return { { res }, false };
+	}
 };
 
 template<typename T, typename H = std::hash<T>, typename E = std::equal_to<T>, typename A = std::allocator<T> >
