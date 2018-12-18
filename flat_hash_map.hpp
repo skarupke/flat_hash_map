@@ -263,7 +263,10 @@ inline size_t next_power_of_two(size_t i)
     return i;
 }
 
-template<typename...> using void_t = void;
+// Implementation taken from http://en.cppreference.com/w/cpp/types/void_t
+// (it takes CWG1558 into account and also works for older compilers)
+template<typename... Ts> struct make_void { typedef void type;};
+template<typename... Ts> using void_t = typename make_void<Ts...>::type;
 
 template<typename T, typename = void>
 struct HashPolicySelector
