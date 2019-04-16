@@ -263,7 +263,18 @@ inline size_t next_power_of_two(size_t i)
     return i;
 }
 
+/* Workaround from https://stackoverflow.com/questions/53469491/stdhash-no-type-named-hash-policy-when-running-skaflat-hash-map
+   This case was underspecified and fixed in http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#1558.
+   This only affects gcc with major version < 5
+  */
+#if defined(__GNUC__) && !defined(__clang__)
+#  if __GNUC__ >= 5
 template<typename...> using void_t = void;
+#  else
+template <typename...> struct voider { using type = void; };
+template <typename... Ts> using void_t = typename voider<Ts...>::type;
+#  endif
+#endif
 
 template<typename T, typename = void>
 struct HashPolicySelector
