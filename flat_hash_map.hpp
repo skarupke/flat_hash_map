@@ -721,7 +721,7 @@ public:
 
     void clear()
     {
-        if (std::is_trivially_destructible_v<FindKey> && std::is_trivially_destructible_v<value_type>)
+        if constexpr (std::is_trivially_destructible_v<FindKey> && std::is_trivially_destructible_v<value_type>)
         {
             reset_to_empty_state(false);
         }
