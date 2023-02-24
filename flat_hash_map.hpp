@@ -4,6 +4,24 @@
 
 #pragma once
 
+// Check windows
+#if _WIN32 || _WIN64
+  #if _WIN64
+    #define ENV64BIT
+  #else
+    #define ENV32BIT
+  #endif
+#endif
+
+// Check GCC
+#if __GNUC__
+  #if __x86_64__ || __ppc64__ || __aarch64__
+    #define ENV64BIT
+  #else
+    #define ENV32BIT
+  #endif
+#endif
+
 #include <cstdint>
 #include <cstddef>
 #include <functional>
@@ -207,6 +225,7 @@ struct sherwood_v3_entry
 
 inline int8_t log2(size_t value)
 {
+#ifdef ENV64BIT
     static constexpr int8_t table[64] =
     {
         63,  0, 58,  1, 59, 47, 53,  2,
@@ -225,6 +244,23 @@ inline int8_t log2(size_t value)
     value |= value >> 16;
     value |= value >> 32;
     return table[((value - (value >> 1)) * 0x07EDD5E59A4E28C2) >> 58];
+#endif
+#ifdef ENV32BIT
+    static constexpr int8_t table[32] =
+    {
+         0,  9,  1, 10, 13, 21,  2, 29,
+        11, 14, 16, 18, 22, 25,  3, 30,
+         8, 12, 20, 28, 15, 17, 24,  7,
+        19, 27, 23,  6, 26,  5,  4, 31
+    };
+
+    value |= value >> 1;
+    value |= value >> 2;
+    value |= value >> 4;
+    value |= value >> 8;
+    value |= value >> 16;
+    return table[(value*0x07C4ACDD) >> 27];
+#endif
 }
 
 template<typename T, bool>
@@ -258,7 +294,9 @@ inline size_t next_power_of_two(size_t i)
     i |= i >> 4;
     i |= i >> 8;
     i |= i >> 16;
+#ifdef ENV64BIT
     i |= i >> 32;
+#endif
     ++i;
     return i;
 }
@@ -929,97 +967,99 @@ private:
 
 struct prime_number_hash_policy
 {
-    static size_t mod0(size_t) { return 0llu; }
-    static size_t mod2(size_t hash) { return hash % 2llu; }
-    static size_t mod3(size_t hash) { return hash % 3llu; }
-    static size_t mod5(size_t hash) { return hash % 5llu; }
-    static size_t mod7(size_t hash) { return hash % 7llu; }
-    static size_t mod11(size_t hash) { return hash % 11llu; }
-    static size_t mod13(size_t hash) { return hash % 13llu; }
-    static size_t mod17(size_t hash) { return hash % 17llu; }
-    static size_t mod23(size_t hash) { return hash % 23llu; }
-    static size_t mod29(size_t hash) { return hash % 29llu; }
-    static size_t mod37(size_t hash) { return hash % 37llu; }
-    static size_t mod47(size_t hash) { return hash % 47llu; }
-    static size_t mod59(size_t hash) { return hash % 59llu; }
-    static size_t mod73(size_t hash) { return hash % 73llu; }
-    static size_t mod97(size_t hash) { return hash % 97llu; }
-    static size_t mod127(size_t hash) { return hash % 127llu; }
-    static size_t mod151(size_t hash) { return hash % 151llu; }
-    static size_t mod197(size_t hash) { return hash % 197llu; }
-    static size_t mod251(size_t hash) { return hash % 251llu; }
-    static size_t mod313(size_t hash) { return hash % 313llu; }
-    static size_t mod397(size_t hash) { return hash % 397llu; }
-    static size_t mod499(size_t hash) { return hash % 499llu; }
-    static size_t mod631(size_t hash) { return hash % 631llu; }
-    static size_t mod797(size_t hash) { return hash % 797llu; }
-    static size_t mod1009(size_t hash) { return hash % 1009llu; }
-    static size_t mod1259(size_t hash) { return hash % 1259llu; }
-    static size_t mod1597(size_t hash) { return hash % 1597llu; }
-    static size_t mod2011(size_t hash) { return hash % 2011llu; }
-    static size_t mod2539(size_t hash) { return hash % 2539llu; }
-    static size_t mod3203(size_t hash) { return hash % 3203llu; }
-    static size_t mod4027(size_t hash) { return hash % 4027llu; }
-    static size_t mod5087(size_t hash) { return hash % 5087llu; }
-    static size_t mod6421(size_t hash) { return hash % 6421llu; }
-    static size_t mod8089(size_t hash) { return hash % 8089llu; }
-    static size_t mod10193(size_t hash) { return hash % 10193llu; }
-    static size_t mod12853(size_t hash) { return hash % 12853llu; }
-    static size_t mod16193(size_t hash) { return hash % 16193llu; }
-    static size_t mod20399(size_t hash) { return hash % 20399llu; }
-    static size_t mod25717(size_t hash) { return hash % 25717llu; }
-    static size_t mod32401(size_t hash) { return hash % 32401llu; }
-    static size_t mod40823(size_t hash) { return hash % 40823llu; }
-    static size_t mod51437(size_t hash) { return hash % 51437llu; }
-    static size_t mod64811(size_t hash) { return hash % 64811llu; }
-    static size_t mod81649(size_t hash) { return hash % 81649llu; }
-    static size_t mod102877(size_t hash) { return hash % 102877llu; }
-    static size_t mod129607(size_t hash) { return hash % 129607llu; }
-    static size_t mod163307(size_t hash) { return hash % 163307llu; }
-    static size_t mod205759(size_t hash) { return hash % 205759llu; }
-    static size_t mod259229(size_t hash) { return hash % 259229llu; }
-    static size_t mod326617(size_t hash) { return hash % 326617llu; }
-    static size_t mod411527(size_t hash) { return hash % 411527llu; }
-    static size_t mod518509(size_t hash) { return hash % 518509llu; }
-    static size_t mod653267(size_t hash) { return hash % 653267llu; }
-    static size_t mod823117(size_t hash) { return hash % 823117llu; }
-    static size_t mod1037059(size_t hash) { return hash % 1037059llu; }
-    static size_t mod1306601(size_t hash) { return hash % 1306601llu; }
-    static size_t mod1646237(size_t hash) { return hash % 1646237llu; }
-    static size_t mod2074129(size_t hash) { return hash % 2074129llu; }
-    static size_t mod2613229(size_t hash) { return hash % 2613229llu; }
-    static size_t mod3292489(size_t hash) { return hash % 3292489llu; }
-    static size_t mod4148279(size_t hash) { return hash % 4148279llu; }
-    static size_t mod5226491(size_t hash) { return hash % 5226491llu; }
-    static size_t mod6584983(size_t hash) { return hash % 6584983llu; }
-    static size_t mod8296553(size_t hash) { return hash % 8296553llu; }
-    static size_t mod10453007(size_t hash) { return hash % 10453007llu; }
-    static size_t mod13169977(size_t hash) { return hash % 13169977llu; }
-    static size_t mod16593127(size_t hash) { return hash % 16593127llu; }
-    static size_t mod20906033(size_t hash) { return hash % 20906033llu; }
-    static size_t mod26339969(size_t hash) { return hash % 26339969llu; }
-    static size_t mod33186281(size_t hash) { return hash % 33186281llu; }
-    static size_t mod41812097(size_t hash) { return hash % 41812097llu; }
-    static size_t mod52679969(size_t hash) { return hash % 52679969llu; }
-    static size_t mod66372617(size_t hash) { return hash % 66372617llu; }
-    static size_t mod83624237(size_t hash) { return hash % 83624237llu; }
-    static size_t mod105359939(size_t hash) { return hash % 105359939llu; }
-    static size_t mod132745199(size_t hash) { return hash % 132745199llu; }
-    static size_t mod167248483(size_t hash) { return hash % 167248483llu; }
-    static size_t mod210719881(size_t hash) { return hash % 210719881llu; }
-    static size_t mod265490441(size_t hash) { return hash % 265490441llu; }
-    static size_t mod334496971(size_t hash) { return hash % 334496971llu; }
-    static size_t mod421439783(size_t hash) { return hash % 421439783llu; }
-    static size_t mod530980861(size_t hash) { return hash % 530980861llu; }
-    static size_t mod668993977(size_t hash) { return hash % 668993977llu; }
-    static size_t mod842879579(size_t hash) { return hash % 842879579llu; }
-    static size_t mod1061961721(size_t hash) { return hash % 1061961721llu; }
-    static size_t mod1337987929(size_t hash) { return hash % 1337987929llu; }
-    static size_t mod1685759167(size_t hash) { return hash % 1685759167llu; }
-    static size_t mod2123923447(size_t hash) { return hash % 2123923447llu; }
-    static size_t mod2675975881(size_t hash) { return hash % 2675975881llu; }
-    static size_t mod3371518343(size_t hash) { return hash % 3371518343llu; }
-    static size_t mod4247846927(size_t hash) { return hash % 4247846927llu; }
+    static size_t mod0(size_t) { return 0u; }
+    static size_t mod2(size_t hash) { return hash % 2u; }
+    static size_t mod3(size_t hash) { return hash % 3u; }
+    static size_t mod5(size_t hash) { return hash % 5u; }
+    static size_t mod7(size_t hash) { return hash % 7u; }
+    static size_t mod11(size_t hash) { return hash % 11u; }
+    static size_t mod13(size_t hash) { return hash % 13u; }
+    static size_t mod17(size_t hash) { return hash % 17u; }
+    static size_t mod23(size_t hash) { return hash % 23u; }
+    static size_t mod29(size_t hash) { return hash % 29u; }
+    static size_t mod37(size_t hash) { return hash % 37u; }
+    static size_t mod47(size_t hash) { return hash % 47u; }
+    static size_t mod59(size_t hash) { return hash % 59u; }
+    static size_t mod73(size_t hash) { return hash % 73u; }
+    static size_t mod97(size_t hash) { return hash % 97u; }
+    static size_t mod127(size_t hash) { return hash % 127u; }
+    static size_t mod151(size_t hash) { return hash % 151u; }
+    static size_t mod197(size_t hash) { return hash % 197u; }
+    static size_t mod251(size_t hash) { return hash % 251u; }
+    static size_t mod313(size_t hash) { return hash % 313u; }
+    static size_t mod397(size_t hash) { return hash % 397u; }
+    static size_t mod499(size_t hash) { return hash % 499u; }
+    static size_t mod631(size_t hash) { return hash % 631u; }
+    static size_t mod797(size_t hash) { return hash % 797u; }
+    static size_t mod1009(size_t hash) { return hash % 1009u; }
+    static size_t mod1259(size_t hash) { return hash % 1259u; }
+    static size_t mod1597(size_t hash) { return hash % 1597u; }
+    static size_t mod2011(size_t hash) { return hash % 2011u; }
+    static size_t mod2539(size_t hash) { return hash % 2539u; }
+    static size_t mod3203(size_t hash) { return hash % 3203u; }
+    static size_t mod4027(size_t hash) { return hash % 4027u; }
+    static size_t mod5087(size_t hash) { return hash % 5087u; }
+    static size_t mod6421(size_t hash) { return hash % 6421u; }
+    static size_t mod8089(size_t hash) { return hash % 8089u; }
+    static size_t mod10193(size_t hash) { return hash % 10193u; }
+    static size_t mod12853(size_t hash) { return hash % 12853u; }
+    static size_t mod16193(size_t hash) { return hash % 16193u; }
+    static size_t mod20399(size_t hash) { return hash % 20399u; }
+    static size_t mod25717(size_t hash) { return hash % 25717u; }
+    static size_t mod32401(size_t hash) { return hash % 32401u; }
+    static size_t mod40823(size_t hash) { return hash % 40823u; }
+    static size_t mod51437(size_t hash) { return hash % 51437u; }
+    static size_t mod64811(size_t hash) { return hash % 64811u; }
+    static size_t mod81649(size_t hash) { return hash % 81649u; }
+    static size_t mod102877(size_t hash) { return hash % 102877u; }
+    static size_t mod129607(size_t hash) { return hash % 129607u; }
+    static size_t mod163307(size_t hash) { return hash % 163307u; }
+    static size_t mod205759(size_t hash) { return hash % 205759u; }
+    static size_t mod259229(size_t hash) { return hash % 259229u; }
+    static size_t mod326617(size_t hash) { return hash % 326617u; }
+    static size_t mod411527(size_t hash) { return hash % 411527u; }
+    static size_t mod518509(size_t hash) { return hash % 518509u; }
+    static size_t mod653267(size_t hash) { return hash % 653267u; }
+    static size_t mod823117(size_t hash) { return hash % 823117u; }
+    static size_t mod1037059(size_t hash) { return hash % 1037059u; }
+    static size_t mod1306601(size_t hash) { return hash % 1306601u; }
+    static size_t mod1646237(size_t hash) { return hash % 1646237u; }
+    static size_t mod2074129(size_t hash) { return hash % 2074129u; }
+    static size_t mod2613229(size_t hash) { return hash % 2613229u; }
+    static size_t mod3292489(size_t hash) { return hash % 3292489u; }
+    static size_t mod4148279(size_t hash) { return hash % 4148279u; }
+    static size_t mod5226491(size_t hash) { return hash % 5226491u; }
+    static size_t mod6584983(size_t hash) { return hash % 6584983u; }
+    static size_t mod8296553(size_t hash) { return hash % 8296553u; }
+    static size_t mod10453007(size_t hash) { return hash % 10453007u; }
+    static size_t mod13169977(size_t hash) { return hash % 13169977u; }
+    static size_t mod16593127(size_t hash) { return hash % 16593127u; }
+    static size_t mod20906033(size_t hash) { return hash % 20906033u; }
+    static size_t mod26339969(size_t hash) { return hash % 26339969u; }
+    static size_t mod33186281(size_t hash) { return hash % 33186281u; }
+    static size_t mod41812097(size_t hash) { return hash % 41812097u; }
+    static size_t mod52679969(size_t hash) { return hash % 52679969u; }
+    static size_t mod66372617(size_t hash) { return hash % 66372617u; }
+    static size_t mod83624237(size_t hash) { return hash % 83624237u; }
+    static size_t mod105359939(size_t hash) { return hash % 105359939u; }
+    static size_t mod132745199(size_t hash) { return hash % 132745199u; }
+    static size_t mod167248483(size_t hash) { return hash % 167248483u; }
+    static size_t mod210719881(size_t hash) { return hash % 210719881u; }
+    static size_t mod265490441(size_t hash) { return hash % 265490441u; }
+    static size_t mod334496971(size_t hash) { return hash % 334496971u; }
+    static size_t mod421439783(size_t hash) { return hash % 421439783u; }
+    static size_t mod530980861(size_t hash) { return hash % 530980861u; }
+    static size_t mod668993977(size_t hash) { return hash % 668993977u; }
+    static size_t mod842879579(size_t hash) { return hash % 842879579u; }
+    static size_t mod1061961721(size_t hash) { return hash % 1061961721u; }
+    static size_t mod1337987929(size_t hash) { return hash % 1337987929u; }
+    static size_t mod1685759167(size_t hash) { return hash % 1685759167u; }
+    static size_t mod2123923447(size_t hash) { return hash % 2123923447u; }
+    static size_t mod2675975881(size_t hash) { return hash % 2675975881u; }
+    static size_t mod3371518343(size_t hash) { return hash % 3371518343u; }
+    static size_t mod4247846927(size_t hash) { return hash % 4247846927u; }
+
+#ifdef ENV64BIT
     static size_t mod5351951779(size_t hash) { return hash % 5351951779llu; }
     static size_t mod6743036717(size_t hash) { return hash % 6743036717llu; }
     static size_t mod8495693897(size_t hash) { return hash % 8495693897llu; }
@@ -1116,6 +1156,7 @@ struct prime_number_hash_policy
     static size_t mod11493228998133068689(size_t hash) { return hash % 11493228998133068689llu; }
     static size_t mod14480561146010017169(size_t hash) { return hash % 14480561146010017169llu; }
     static size_t mod18446744073709551557(size_t hash) { return hash % 18446744073709551557llu; }
+#endif
 
     using mod_function = size_t (*)(size_t);
 
@@ -1130,20 +1171,22 @@ struct prime_number_hash_policy
         // 5. get PrevPrime(2^64) and put it at the end
         static constexpr const size_t prime_list[] =
         {
-            2llu, 3llu, 5llu, 7llu, 11llu, 13llu, 17llu, 23llu, 29llu, 37llu, 47llu,
-            59llu, 73llu, 97llu, 127llu, 151llu, 197llu, 251llu, 313llu, 397llu,
-            499llu, 631llu, 797llu, 1009llu, 1259llu, 1597llu, 2011llu, 2539llu,
-            3203llu, 4027llu, 5087llu, 6421llu, 8089llu, 10193llu, 12853llu, 16193llu,
-            20399llu, 25717llu, 32401llu, 40823llu, 51437llu, 64811llu, 81649llu,
-            102877llu, 129607llu, 163307llu, 205759llu, 259229llu, 326617llu,
-            411527llu, 518509llu, 653267llu, 823117llu, 1037059llu, 1306601llu,
-            1646237llu, 2074129llu, 2613229llu, 3292489llu, 4148279llu, 5226491llu,
-            6584983llu, 8296553llu, 10453007llu, 13169977llu, 16593127llu, 20906033llu,
-            26339969llu, 33186281llu, 41812097llu, 52679969llu, 66372617llu,
-            83624237llu, 105359939llu, 132745199llu, 167248483llu, 210719881llu,
-            265490441llu, 334496971llu, 421439783llu, 530980861llu, 668993977llu,
-            842879579llu, 1061961721llu, 1337987929llu, 1685759167llu, 2123923447llu,
-            2675975881llu, 3371518343llu, 4247846927llu, 5351951779llu, 6743036717llu,
+            2u, 3u, 5u, 7u, 11u, 13u, 17u, 23u, 29u, 37u, 47u,
+            59u, 73u, 97u, 127u, 151u, 197u, 251u, 313u, 397u,
+            499u, 631u, 797u, 1009u, 1259u, 1597u, 2011u, 2539u,
+            3203u, 4027u, 5087u, 6421u, 8089u, 10193u, 12853u, 16193u,
+            20399u, 25717u, 32401u, 40823u, 51437u, 64811u, 81649u,
+            102877u, 129607u, 163307u, 205759u, 259229u, 326617u,
+            411527u, 518509u, 653267u, 823117u, 1037059u, 1306601u,
+            1646237u, 2074129u, 2613229u, 3292489u, 4148279u, 5226491u,
+            6584983u, 8296553u, 10453007u, 13169977u, 16593127u, 20906033u,
+            26339969u, 33186281u, 41812097u, 52679969u, 66372617u,
+            83624237u, 105359939u, 132745199u, 167248483u, 210719881u,
+            265490441u, 334496971u, 421439783u, 530980861u, 668993977u,
+            842879579u, 1061961721u, 1337987929u, 1685759167u, 2123923447u,
+            2675975881u, 3371518343u, 4247846927u
+#ifdef ENV64BIT
+            , 5351951779llu, 6743036717llu,
             8495693897llu, 10703903591llu, 13486073473llu, 16991387857llu,
             21407807219llu, 26972146961llu, 33982775741llu, 42815614441llu,
             53944293929llu, 67965551447llu, 85631228929llu, 107888587883llu,
@@ -1172,6 +1215,7 @@ struct prime_number_hash_policy
             2873307249533267101llu, 3620140286502504283llu, 4561090950536962147llu,
             5746614499066534157llu, 7240280573005008577llu, 9122181901073924329llu,
             11493228998133068689llu, 14480561146010017169llu, 18446744073709551557llu
+#endif
         };
         static constexpr size_t (* const mod_functions[])(size_t) =
         {
@@ -1187,8 +1231,10 @@ struct prime_number_hash_policy
             &mod41812097, &mod52679969, &mod66372617, &mod83624237, &mod105359939, &mod132745199,
             &mod167248483, &mod210719881, &mod265490441, &mod334496971, &mod421439783,
             &mod530980861, &mod668993977, &mod842879579, &mod1061961721, &mod1337987929,
-            &mod1685759167, &mod2123923447, &mod2675975881, &mod3371518343, &mod4247846927,
-            &mod5351951779, &mod6743036717, &mod8495693897, &mod10703903591, &mod13486073473,
+            &mod1685759167, &mod2123923447, &mod2675975881, &mod3371518343, &mod4247846927
+
+#ifdef ENV64BIT
+            , &mod5351951779, &mod6743036717, &mod8495693897, &mod10703903591, &mod13486073473,
             &mod16991387857, &mod21407807219, &mod26972146961, &mod33982775741, &mod42815614441,
             &mod53944293929, &mod67965551447, &mod85631228929, &mod107888587883, &mod135931102921,
             &mod171262457903, &mod215777175787, &mod271862205833, &mod342524915839,
@@ -1214,6 +1260,7 @@ struct prime_number_hash_policy
             &mod2873307249533267101, &mod3620140286502504283, &mod4561090950536962147,
             &mod5746614499066534157, &mod7240280573005008577, &mod9122181901073924329,
             &mod11493228998133068689, &mod14480561146010017169, &mod18446744073709551557
+#endif
         };
         const size_t * found = std::lower_bound(std::begin(prime_list), std::end(prime_list) - 1, size);
         size = *found;
