@@ -597,6 +597,11 @@ public:
             AllocatorTraits::destroy(*this, std::addressof(*next));
             next.set_metadata(Constants::magic_for_empty);
             previous.clear_next();
+            // The iteration order in the map after erase is changed for future iterations over the map
+            // But it only changed in the portion of the map before `const_iterator to_erase` (indexes greater than current.index)
+            // We didn't touch the order of the elements after `const_iterator to_erase` (indexes smaller than current.index)
+            // so we can just return convertible_to_iterator{ to_erase.current, to_erase.index },
+            // which will advance to the next element upon conversion to iterator
         }
         else
         {
@@ -1019,19 +1024,16 @@ private:
         BlockPointer it;
         size_t index;
 
+        // We always have to move to the next element upon conversion, 
+        // because if it's not empty it's something that we already 
+        // visited and moved to the current position
         operator iterator()
         {
-            if (it->control_bytes[index % BlockSize] == Constants::magic_for_empty)
-                return ++iterator{it, index};
-            else
-                return { it, index };
+            return ++iterator{it, index};
         }
         operator const_iterator()
         {
-            if (it->control_bytes[index % BlockSize] == Constants::magic_for_empty)
-                return ++iterator{it, index};
-            else
-                return { it, index };
+            return ++iterator{it, index};
         }
     };
 };
