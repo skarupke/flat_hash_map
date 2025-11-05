@@ -428,7 +428,9 @@ public:
     }
     ~sherwood_v3_table()
     {
-        clear();
+        if constexpr (not std::is_trivially_destructible_v<value_type>) {
+          clear();
+        }
         deallocate_data(entries, num_slots_minus_one, max_lookups);
     }
 
@@ -554,6 +556,10 @@ public:
     size_t count(const FindKey & key) const
     {
         return find(key) == end() ? 0 : 1;
+    }
+    bool contains(const FindKey & key) const
+    {
+        return find(key) != end();
     }
     std::pair<iterator, iterator> equal_range(const FindKey & key)
     {
